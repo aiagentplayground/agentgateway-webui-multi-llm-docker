@@ -1,0 +1,24 @@
+{
+  "name": "a2a-demo-agents",
+  "version": "1.0.0",
+  "description": "Example A2A agents for AgentGateway demo",
+  "main": "index.js",
+  "scripts": {
+    "hello": "node hello-agent.js",
+    "calculator": "node calculator-agent.js",
+    "start-all": "concurrently \"npm run hello\" \"npm run calculator\""
+  },
+  "keywords": [
+    "a2a",
+    "agent",
+    "agentgateway"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.0"
+  }
+}
