@@ -1,11 +1,13 @@
 FROM ubuntu:22.04
 
-# Install dependencies
+# Install dependencies including Node.js for MCP servers
 RUN apt-get update && apt-get install -y \
     curl \
     ca-certificates \
     git \
     jq \
+    && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Download and install agentgateway

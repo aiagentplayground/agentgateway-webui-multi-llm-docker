@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=../../schema/local.json
+binds:
+- port: 3005
+  listeners:
+  - name: mcp-listener
+    routes:
+    - name: mcp-direct
+      policies:
+        cors:
+          allowOrigins:
+            - "*"
+          allowHeaders:
+            - mcp-protocol-version
+            - content-type
+            - cache-control
+      backends:
+      - mcp:
+          targets:
+          - name: everything
+            stdio:
+              cmd: npx
+              args: ["@modelcontextprotocol/server-everything"]

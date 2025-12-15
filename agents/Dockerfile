@@ -10,6 +10,7 @@ RUN npm install
 
 # Copy agent source files
 COPY *.js ./
+COPY lib/ ./lib/
 
 # Expose ports (will be overridden by docker-compose)
 EXPOSE 9001 9002

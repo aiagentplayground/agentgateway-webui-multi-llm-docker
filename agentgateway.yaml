@@ -110,27 +110,6 @@ binds:
           routes:
             /xai/v1/chat/completions: completions
 
-    # MCP backend
-    - name: mcp-tools
-      matches:
-        - path:
-            pathPrefix: /mcp
-      policies:
-        cors:
-          allowOrigins:
-            - "*"
-          allowHeaders:
-            - mcp-protocol-version
-            - content-type
-            - cache-control
-      backends:
-      - mcp:
-          targets:
-          - name: everything
-            stdio:
-              cmd: npx
-              args: ["-y", "@modelcontextprotocol/server-everything"]
-
     # Hello Agent A2A
     - name: a2a-hello-agent
       matches:
@@ -282,7 +261,7 @@ binds:
           - name: everything
             stdio:
               cmd: npx
-              args: ["-y", "@modelcontextprotocol/server-everything"]
+              args: ["@modelcontextprotocol/server-everything"]
 
 # Dedicated listener for A2A agents
 - port: 3006

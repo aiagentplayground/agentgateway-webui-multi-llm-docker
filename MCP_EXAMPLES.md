@@ -12,49 +12,20 @@ This guide provides complete examples for testing MCP server connections through
 
 The stdio connection uses the `@modelcontextprotocol/server-everything` package, which provides a comprehensive set of demo tools.
 
-### 1. List Available Tools
+**Important**: MCP requires a session-based flow. You must initialize a session first and use the returned session ID in all subsequent requests.
+
+### 1. Initialize Session
+
+First, create a session:
 
 ```bash
 curl -X POST http://localhost:3000/mcp/stdio \
   -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
   -H "mcp-protocol-version: 2024-11-05" \
   -d '{
     "jsonrpc": "2.0",
     "id": 1,
-    "method": "tools/list"
-  }'
-```
-
-Expected response includes a list of available tools like `echo`, `add`, `longRunningOperation`, etc.
-
-### 2. Call the Echo Tool
-
-```bash
-curl -X POST http://localhost:3000/mcp/stdio \
-  -H "Content-Type: application/json" \
-  -H "mcp-protocol-version: 2024-11-05" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 2,
-    "method": "tools/call",
-    "params": {
-      "name": "echo",
-      "arguments": {
-        "message": "Hello from AgentGateway MCP!"
-      }
-    }
-  }'
-```
-
-### 3. Get Server Info
-
-```bash
-curl -X POST http://localhost:3000/mcp/stdio \
-  -H "Content-Type: application/json" \
-  -H "mcp-protocol-version: 2024-11-05" \
-  -d '{
-    "jsonrpc": "2.0",
-    "id": 3,
     "method": "initialize",
     "params": {
       "protocolVersion": "2024-11-05",
@@ -62,6 +33,50 @@ curl -X POST http://localhost:3000/mcp/stdio \
       "clientInfo": {
         "name": "agentgateway-test",
         "version": "1.0.0"
+      }
+    }
+  }'
+```
+
+The response will include a session ID. **Save this session ID** - you'll need it for all subsequent requests.
+
+### 2. List Available Tools
+
+Now use the session ID from step 1 (replace `YOUR_SESSION_ID` with the actual value):
+
+```bash
+curl -X POST http://localhost:3000/mcp/stdio \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "mcp-protocol-version: 2024-11-05" \
+  -H "session: YOUR_SESSION_ID" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 2,
+    "method": "tools/list"
+  }'
+```
+
+Expected response includes a list of available tools like `echo`, `add`, `longRunningOperation`, etc.
+
+### 3. Call the Echo Tool
+
+Use the session ID from step 1:
+
+```bash
+curl -X POST http://localhost:3000/mcp/stdio \
+  -H "Content-Type: application/json" \
+  -H "Accept: application/json, text/event-stream" \
+  -H "mcp-protocol-version: 2024-11-05" \
+  -H "session: YOUR_SESSION_ID" \
+  -d '{
+    "jsonrpc": "2.0",
+    "id": 3,
+    "method": "tools/call",
+    "params": {
+      "name": "echo",
+      "arguments": {
+        "message": "Hello from AgentGateway MCP!"
       }
     }
   }'
