@@ -1,146 +1,302 @@
-# yaml-language-server: $schema=../../schema/local.json
-config:
-  adminAddr: "0.0.0.0:15000"
-  tracing:
-    otlpEndpoint: http://jaeger:4317
-    randomSampling: true
+# ============================================================================
+# AgentGateway Configuration File
+# ============================================================================
+#
+# This file configures a multi-provider AI gateway that provides:
+# - Unified access to multiple AI providers (Anthropic, OpenAI, Gemini, xAI)
+# - Model Context Protocol (MCP) integration for tool use
+# - Agent-to-Agent (A2A) communication
+# - Rate limiting and cost controls
+# - Request tracing and monitoring
+#
+# Architecture:
+# - Port 3000: Unified gateway with path-based routing to all services
+# - Ports 3001-3006: Dedicated listeners for each service (optional)
+#
+# Usage Examples:
+# - Anthropic:  POST http://localhost:3000/anthropic/v1/messages
+# - OpenAI:     POST http://localhost:3000/openai/v1/chat/completions
+# - Gemini:     POST http://localhost:3000/gemini/v1/chat/completions
+# - xAI Grok:   POST http://localhost:3000/xai/v1/chat/completions
+# - MCP Tools:  Connect via SSE to http://localhost:3000/mcp/sse
+# - Hello Agent: POST http://localhost:3000/agent/hello
+# - Calculator:  POST http://localhost:3000/agent/calculator
+#
+# ============================================================================
 
+# yaml-language-server: $schema=../../schema/local.json
+
+# ============================================================================
+# GLOBAL CONFIGURATION
+# ============================================================================
+config:
+  # Admin interface for monitoring and configuration
+  # Access the UI at http://localhost:15000/ui
+  adminAddr: "0.0.0.0:15000"
+
+  # Distributed tracing configuration
+  # Sends traces to Jaeger for request monitoring and debugging
+  tracing:
+    otlpEndpoint: http://jaeger:4317    # Jaeger OTLP endpoint
+    randomSampling: true                # Enable sampling for all requests
+
+# ============================================================================
+# LISTENERS AND ROUTES
+# ============================================================================
 binds:
-# Main unified gateway - all providers accessible through one port
+
+# ============================================================================
+# UNIFIED GATEWAY - Port 3000
+# ============================================================================
+# This listener provides path-based routing to all services through a single port.
+# Recommended for most use cases as it simplifies client configuration.
+#
+# Benefits:
+# - Single entry point for all services
+# - Easier to configure load balancers and firewalls
+# - Consistent CORS and security policies
+# ============================================================================
 - port: 3000
   listeners:
   - name: agentgateway
     routes:
-    # Anthropic AI backend with security & cost controls
+
+    # ------------------------------------------------------------------------
+    # ANTHROPIC CLAUDE
+    # ------------------------------------------------------------------------
+    # Provider: Anthropic
+    # Model: Claude Haiku 4.5
+    # Path: /anthropic/*
+    #
+    # Example request:
+    #   POST http://localhost:3000/anthropic/v1/messages
+    #   Content-Type: application/json
+    #   {
+    #     "model": "claude-haiku-4-5-20251001",
+    #     "messages": [{"role": "user", "content": "Hello!"}],
+    #     "max_tokens": 1024
+    #   }
+    # ------------------------------------------------------------------------
     - name: anthropic-claude
       matches:
         - path:
-            pathPrefix: /anthropic
+            pathPrefix: /anthropic    # Routes /anthropic/* to this backend
       policies:
-        # Cost Control: Rate limiting to prevent excessive API usage
-        # Token bucket: 10 requests max, refill 10 tokens every 60 seconds
+        # Rate limiting: Token bucket algorithm
+        # Prevents excessive API usage and controls costs
+        # Current config: 10 requests per minute per client
         localRateLimit:
-          - maxTokens: 10
-            tokensPerFill: 10
-            fillInterval: 60s
-        # Authentication: Secure API key handling
+          - maxTokens: 10           # Maximum tokens in bucket
+            tokensPerFill: 10       # Tokens added per fill interval
+            fillInterval: 60s       # Fill every 60 seconds
+
+        # Backend authentication
+        # Automatically injects API key into requests
         backendAuth:
-          key: "$ANTHROPIC_API_KEY"
+          key: "$ANTHROPIC_API_KEY"  # Environment variable
       backends:
       - ai:
           name: anthropic
           provider:
             anthropic:
-              model: claude-haiku-4-5-20251001
+              model: claude-haiku-4-5-20251001  # Default model
           routes:
-            /v1/messages: messages
-            /v1/chat/completions: completions
-            /v1/models: passthrough
-            "*": passthrough
+            # Maps incoming paths to Anthropic API endpoints
+            /v1/messages: messages              # Native Anthropic format
+            /v1/chat/completions: completions   # OpenAI-compatible format
+            /v1/models: passthrough             # List models
+            "*": passthrough                    # Catch-all for other endpoints
 
-    # OpenAI backend
+    # ------------------------------------------------------------------------
+    # OPENAI GPT
+    # ------------------------------------------------------------------------
+    # Provider: OpenAI
+    # Model: GPT-5.2
+    # Path: /openai/*
+    #
+    # Example request:
+    #   POST http://localhost:3000/openai/v1/chat/completions
+    #   Content-Type: application/json
+    #   {
+    #     "model": "gpt-5.2-2025-12-11",
+    #     "messages": [{"role": "user", "content": "Hello!"}]
+    #   }
+    # ------------------------------------------------------------------------
     - name: openai-gpt
       matches:
         - path:
-            pathPrefix: /openai
+            pathPrefix: /openai       # Routes /openai/* to this backend
       policies:
         localRateLimit:
-          - maxTokens: 10
+          - maxTokens: 10             # 10 requests per minute
             tokensPerFill: 10
             fillInterval: 60s
         backendAuth:
-          key: "$OPENAI_API_KEY"
+          key: "$OPENAI_API_KEY"      # Environment variable
       backends:
       - ai:
           name: openai
           provider:
             openAI:
-              model: gpt-5.2-2025-12-11
+              model: gpt-5.2-2025-12-11  # Default model
           routes:
-            /openai/v1/chat/completions: completions
-            /openai/v1/models: models
+            /openai/v1/chat/completions: completions  # Chat completions
+            /openai/v1/models: models                 # List models
 
-    # Gemini (Google AI)
+    # ------------------------------------------------------------------------
+    # GOOGLE GEMINI
+    # ------------------------------------------------------------------------
+    # Provider: Google
+    # Model: Gemini 3 Pro Preview
+    # Path: /gemini/*
+    #
+    # Example request:
+    #   POST http://localhost:3000/gemini/v1/chat/completions
+    #   Content-Type: application/json
+    #   {
+    #     "model": "gemini-3-pro-preview",
+    #     "messages": [{"role": "user", "content": "Hello!"}]
+    #   }
+    # ------------------------------------------------------------------------
     - name: google-gemini
       matches:
         - path:
-            pathPrefix: /gemini
+            pathPrefix: /gemini       # Routes /gemini/* to this backend
       policies:
         localRateLimit:
-          - maxTokens: 10
+          - maxTokens: 10             # 10 requests per minute
             tokensPerFill: 10
             fillInterval: 60s
         backendAuth:
-          key: "$GEMINI_API_KEY"
+          key: "$GEMINI_API_KEY"      # Environment variable
       backends:
       - ai:
           name: gemini
           provider:
             gemini:
-              model: gemini-3-pro-preview
+              model: gemini-3-pro-preview  # Default model
           routes:
-            /gemini/v1/chat/completions: completions
-            /gemini/v1/models: models
+            /gemini/v1/chat/completions: completions  # Chat completions
+            /gemini/v1/models: models                 # List models
 
-    # XAI Grok - OpenAI-compatible API
+    # ------------------------------------------------------------------------
+    # XAI GROK
+    # ------------------------------------------------------------------------
+    # Provider: xAI (X.AI)
+    # Model: Grok 4 Latest
+    # Path: /xai/*
+    #
+    # Note: xAI uses OpenAI-compatible API format but hosted at api.x.ai
+    # Requires URL rewriting and TLS configuration
+    #
+    # Example request:
+    #   POST http://localhost:3000/xai/v1/chat/completions
+    #   Content-Type: application/json
+    #   {
+    #     "model": "grok-4-latest",
+    #     "messages": [{"role": "user", "content": "Hello!"}]
+    #   }
+    # ------------------------------------------------------------------------
     - name: xai-grok
       matches:
         - path:
-            pathPrefix: /xai
+            pathPrefix: /xai          # Routes /xai/* to this backend
       policies:
+        # URL rewriting to proxy to api.x.ai
         urlRewrite:
           authority:
-            full: api.x.ai
+            full: api.x.ai            # Rewrite host to api.x.ai
           path:
-            full: "/v1/chat/completions"
-        backendTLS: {}
+            full: "/v1/chat/completions"  # Rewrite path
+        backendTLS: {}                # Enable TLS for HTTPS connection
         localRateLimit:
-          - maxTokens: 10
+          - maxTokens: 10             # 10 requests per minute
             tokensPerFill: 10
             fillInterval: 60s
         backendAuth:
-          key: "$XAI_API_KEY"
+          key: "$XAI_API_KEY"         # Environment variable
       backends:
       - ai:
           name: xai
-          hostOverride: api.x.ai:443
+          hostOverride: api.x.ai:443  # Connect to xAI's API server
           provider:
-            openAI:
-              model: grok-4-latest
+            openAI:                   # Uses OpenAI-compatible format
+              model: grok-4-latest    # Default model
           routes:
-            /xai/v1/chat/completions: completions
+            /xai/v1/chat/completions: completions  # Chat completions
 
-    # Hello Agent A2A
+    # ------------------------------------------------------------------------
+    # HELLO AGENT (A2A)
+    # ------------------------------------------------------------------------
+    # Agent-to-Agent communication example: Simple greeting agent
+    # Path: /agent/hello/*
+    # Backend: Docker container 'hello-agent' on port 9001
+    #
+    # Example request:
+    #   POST http://localhost:3000/agent/hello
+    #   Content-Type: application/json
+    #   { "message": "Hi there!" }
+    # ------------------------------------------------------------------------
     - name: a2a-hello-agent
       matches:
         - path:
-            pathPrefix: /agent/hello
+            pathPrefix: /agent/hello  # Routes /agent/hello/* to hello agent
       policies:
+        # CORS configuration for browser access
         cors:
           allowOrigins:
-            - "*"
+            - "*"                     # Allow all origins (configure for production)
           allowHeaders:
-            - "*"
-        a2a: {}
+            - "*"                     # Allow all headers
+        a2a: {}                       # Enable A2A protocol handling
       backends:
-      - host: hello-agent:9001
+      - host: hello-agent:9001        # Docker service name and port
 
-    # Calculator Agent A2A
+    # ------------------------------------------------------------------------
+    # CALCULATOR AGENT (A2A)
+    # ------------------------------------------------------------------------
+    # Agent-to-Agent communication example: Calculator agent
+    # Path: /agent/calculator/*
+    # Backend: Docker container 'calculator-agent' on port 9002
+    #
+    # Example request:
+    #   POST http://localhost:3000/agent/calculator
+    #   Content-Type: application/json
+    #   { "operation": "add", "a": 5, "b": 3 }
+    # ------------------------------------------------------------------------
     - name: a2a-calculator-agent
       matches:
         - path:
-            pathPrefix: /agent/calculator
+            pathPrefix: /agent/calculator  # Routes /agent/calculator/* to calculator
       policies:
         cors:
           allowOrigins:
-            - "*"
+            - "*"                     # Allow all origins (configure for production)
           allowHeaders:
-            - "*"
-        a2a: {}
+            - "*"                     # Allow all headers
+        a2a: {}                       # Enable A2A protocol handling
       backends:
-      - host: calculator-agent:9002
+      - host: calculator-agent:9002   # Docker service name and port
 
-# Dedicated listener for Anthropic Claude
+# ============================================================================
+# DEDICATED LISTENERS
+# ============================================================================
+# The following sections provide dedicated ports for each service.
+# These are optional and useful for:
+# - Service isolation
+# - Independent rate limiting per service
+# - Separate monitoring and metrics
+# - Legacy clients that expect specific ports
+#
+# You can safely remove these if you only need the unified gateway on port 3000
+# ============================================================================
+
+# ----------------------------------------------------------------------------
+# ANTHROPIC CLAUDE - Dedicated Listener (Port 3001)
+# ----------------------------------------------------------------------------
+# Direct access to Anthropic Claude without path prefix
+# Usage: POST http://localhost:3001/v1/messages
+# ----------------------------------------------------------------------------
 - port: 3001
   listeners:
   - name: anthropic-listener
@@ -148,7 +304,7 @@ binds:
     - name: anthropic-direct
       policies:
         localRateLimit:
-          - maxTokens: 10
+          - maxTokens: 10             # 10 requests per minute
             tokensPerFill: 10
             fillInterval: 60s
         backendAuth:
@@ -165,7 +321,12 @@ binds:
             /v1/models: passthrough
             "*": passthrough
 
-# Dedicated listener for OpenAI
+# ----------------------------------------------------------------------------
+# OPENAI GPT - Dedicated Listener (Port 3002)
+# ----------------------------------------------------------------------------
+# Direct access to OpenAI without path prefix
+# Usage: POST http://localhost:3002/v1/chat/completions
+# ----------------------------------------------------------------------------
 - port: 3002
   listeners:
   - name: openai-listener
@@ -173,7 +334,7 @@ binds:
     - name: openai-direct
       policies:
         localRateLimit:
-          - maxTokens: 10
+          - maxTokens: 10             # 10 requests per minute
             tokensPerFill: 10
             fillInterval: 60s
         backendAuth:
@@ -188,7 +349,12 @@ binds:
             /v1/chat/completions: completions
             /v1/models: models
 
-# Dedicated listener for xAI Grok
+# ----------------------------------------------------------------------------
+# XAI GROK - Dedicated Listener (Port 3003)
+# ----------------------------------------------------------------------------
+# Direct access to xAI Grok without path prefix
+# Usage: POST http://localhost:3003/v1/chat/completions
+# ----------------------------------------------------------------------------
 - port: 3003
   listeners:
   - name: xai-listener
@@ -202,7 +368,7 @@ binds:
             full: "/v1/chat/completions"
         backendTLS: {}
         localRateLimit:
-          - maxTokens: 10
+          - maxTokens: 10             # 10 requests per minute
             tokensPerFill: 10
             fillInterval: 60s
         backendAuth:
@@ -218,7 +384,12 @@ binds:
             /v1/chat/completions: completions
             /v1/models: models
 
-# Dedicated listener for Google Gemini
+# ----------------------------------------------------------------------------
+# GOOGLE GEMINI - Dedicated Listener (Port 3004)
+# ----------------------------------------------------------------------------
+# Direct access to Google Gemini without path prefix
+# Usage: POST http://localhost:3004/v1/chat/completions
+# ----------------------------------------------------------------------------
 - port: 3004
   listeners:
   - name: gemini-listener
@@ -226,7 +397,7 @@ binds:
     - name: gemini-direct
       policies:
         localRateLimit:
-          - maxTokens: 10
+          - maxTokens: 10             # 10 requests per minute
             tokensPerFill: 10
             fillInterval: 60s
         backendAuth:
@@ -241,18 +412,40 @@ binds:
             /v1/chat/completions: completions
             /v1/models: models
 
-# Dedicated listener for MCP tools
+# ----------------------------------------------------------------------------
+# MCP TOOLS - Dedicated Listener (Port 3005)
+# ----------------------------------------------------------------------------
+# Model Context Protocol (MCP) server for tool use
+#
+# MCP enables AI models to access external tools and data sources:
+# - File system operations
+# - API calls
+# - Database queries
+# - And more via @modelcontextprotocol/server-everything
+#
+# Connection methods:
+# - SSE (Server-Sent Events): GET http://localhost:3005/sse
+# - Stdio: Used for local process communication
+#
+# Requirements:
+# - Node.js and npx must be installed in the container
+# - Package @modelcontextprotocol/server-everything will be auto-installed
+#
+# Note: Do NOT use the -y flag with npx in Docker environments as it can
+# cause timing issues with the MCP protocol handshake
+# ----------------------------------------------------------------------------
 - port: 3005
   listeners:
   - name: mcp-listener
     routes:
     - name: mcp-direct
       policies:
+        # CORS is required for browser-based MCP clients
         cors:
           allowOrigins:
-            - "*"
+            - "*"                     # Allow all origins (configure for production)
           allowHeaders:
-            - mcp-protocol-version
+            - mcp-protocol-version    # MCP protocol version header
             - content-type
             - cache-control
       backends:
@@ -260,15 +453,23 @@ binds:
           targets:
           - name: everything
             stdio:
-              cmd: npx
+              cmd: npx                # Node Package eXecute
               args: ["@modelcontextprotocol/server-everything"]
+              # This installs and runs the MCP server with all tools enabled
 
-# Dedicated listener for A2A agents
+# ----------------------------------------------------------------------------
+# A2A AGENTS - Dedicated Listener (Port 3006)
+# ----------------------------------------------------------------------------
+# Agent-to-Agent communication dedicated port
+# Provides direct access to A2A agents without path prefix conflicts
+# ----------------------------------------------------------------------------
 - port: 3006
   listeners:
   - name: a2a-listener
     routes:
-    # Hello Agent
+
+    # Hello Agent - Simple greeting agent
+    # Usage: POST http://localhost:3006/hello
     - name: hello-agent-direct
       matches:
         - path:
@@ -276,14 +477,15 @@ binds:
       policies:
         cors:
           allowOrigins:
-            - "*"
+            - "*"                     # Allow all origins (configure for production)
           allowHeaders:
-            - "*"
-        a2a: {}
+            - "*"                     # Allow all headers
+        a2a: {}                       # Enable A2A protocol
       backends:
-      - host: hello-agent:9001
+      - host: hello-agent:9001        # Docker service name
 
-    # Calculator Agent
+    # Calculator Agent - Arithmetic operations
+    # Usage: POST http://localhost:3006/calculator
     - name: calculator-agent-direct
       matches:
         - path:
@@ -291,9 +493,45 @@ binds:
       policies:
         cors:
           allowOrigins:
-            - "*"
+            - "*"                     # Allow all origins (configure for production)
           allowHeaders:
-            - "*"
-        a2a: {}
+            - "*"                     # Allow all headers
+        a2a: {}                       # Enable A2A protocol
       backends:
-      - host: calculator-agent:9002
+      - host: calculator-agent:9002   # Docker service name
+
+# ============================================================================
+# CONFIGURATION NOTES
+# ============================================================================
+#
+# Rate Limiting:
+# - Adjust maxTokens and fillInterval based on your API quotas
+# - Consider different limits for different environments (dev/prod)
+# - Monitor via Grafana dashboard at http://localhost:3100
+#
+# Security:
+# - API keys are read from environment variables
+# - Configure CORS allowOrigins restrictively in production
+# - Enable TLS termination at load balancer level for production
+#
+# Monitoring:
+# - Traces: Jaeger UI at http://localhost:16686
+# - Metrics: Prometheus at http://localhost:9090
+# - Dashboards: Grafana at http://localhost:3100
+# - Admin UI: http://localhost:15000/ui
+#
+# Environment Variables Required:
+# - ANTHROPIC_API_KEY: Your Anthropic API key
+# - OPENAI_API_KEY: Your OpenAI API key
+# - GEMINI_API_KEY: Your Google Gemini API key
+# - XAI_API_KEY: Your xAI API key
+#
+# Adding New Providers:
+# 1. Add route configuration under port 3000 routes section
+# 2. Configure path matching and policies
+# 3. Add backend configuration with provider details
+# 4. (Optional) Add dedicated listener on new port
+# 5. Update docker-compose.yml to expose the port
+# 6. Set environment variable for API key
+#
+# ============================================================================

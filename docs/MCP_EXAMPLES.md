@@ -19,7 +19,7 @@ The stdio connection uses the `@modelcontextprotocol/server-everything` package,
 First, create a session:
 
 ```bash
-curl -X POST http://localhost:3000/mcp/stdio \
+curl -X POST http://localhost:3005/mcp/stdio \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "mcp-protocol-version: 2024-11-05" \

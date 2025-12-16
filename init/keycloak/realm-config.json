@@ -1,0 +1,218 @@
+{
+  "realm": "agentgateway",
+  "displayName": "AgentGateway Realm",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "groups": [
+    {
+      "name": "marketing",
+      "path": "/marketing",
+      "attributes": {
+        "description": ["Marketing Team"]
+      }
+    },
+    {
+      "name": "platform",
+      "path": "/platform",
+      "attributes": {
+        "description": ["Platform Engineering Team"]
+      }
+    },
+    {
+      "name": "security",
+      "path": "/security",
+      "attributes": {
+        "description": ["Security Team"]
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "admin",
+      "email": "admin@example.com",
+      "firstName": "Admin",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Admin123!",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["admin"],
+      "groups": []
+    },
+    {
+      "username": "sarah.johnson",
+      "email": "sarah.marketing@example.com",
+      "firstName": "Sarah",
+      "lastName": "Johnson",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Marketing123!",
+          "temporary": false
+        }
+      ],
+      "groups": ["/marketing"]
+    },
+    {
+      "username": "mike.chen",
+      "email": "mike.marketing@example.com",
+      "firstName": "Mike",
+      "lastName": "Chen",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Marketing123!",
+          "temporary": false
+        }
+      ],
+      "groups": ["/marketing"]
+    },
+    {
+      "username": "alex.rivera",
+      "email": "alex.platform@example.com",
+      "firstName": "Alex",
+      "lastName": "Rivera",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Platform123!",
+          "temporary": false
+        }
+      ],
+      "groups": ["/platform"]
+    },
+    {
+      "username": "jordan.kim",
+      "email": "jordan.platform@example.com",
+      "firstName": "Jordan",
+      "lastName": "Kim",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Platform123!",
+          "temporary": false
+        }
+      ],
+      "groups": ["/platform"]
+    },
+    {
+      "username": "taylor.morgan",
+      "email": "taylor.security@example.com",
+      "firstName": "Taylor",
+      "lastName": "Morgan",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Security123!",
+          "temporary": false
+        }
+      ],
+      "groups": ["/security"]
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "open-webui",
+      "name": "Open WebUI",
+      "description": "Open WebUI SSO Client",
+      "enabled": true,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "open-webui-secret-key-change-in-production",
+      "redirectUris": [
+        "http://localhost:8888/*",
+        "http://localhost:8888/oauth/callback",
+        "http://open-webui:8080/*",
+        "http://open-webui:8080/oauth/callback"
+      ],
+      "webOrigins": [
+        "http://localhost:8888",
+        "http://open-webui:8080"
+      ],
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": false,
+      "attributes": {
+        "access.token.lifespan": "3600",
+        "client.session.idle.timeout": "3600",
+        "client.session.max.lifespan": "36000"
+      },
+      "protocolMappers": [
+        {
+          "name": "groups",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-group-membership-mapper",
+          "consentRequired": false,
+          "config": {
+            "full.path": "false",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "groups",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "email",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "userinfo.token.claim": "true",
+            "user.attribute": "email",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "claim.name": "email",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-full-name-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "roles": {
+    "realm": [
+      {
+        "name": "admin",
+        "description": "Administrator role"
+      },
+      {
+        "name": "user",
+        "description": "Standard user role"
+      }
+    ]
+  },
+  "defaultRoles": ["user"]
+}
