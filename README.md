@@ -180,6 +180,13 @@ Users are managed through Keycloak:
 - **Prometheus**: Scrapes metrics from AgentGateway (port 15020)
 - **Grafana**: Visualizes metrics with pre-configured dashboards
 
+### User & Team Analytics
+- **Track Usage by User**: Monitor which users and teams are using which LLM providers
+- **Cost Attribution**: View request counts and token usage per user
+- **Grafana Dashboard**: Pre-built **User & Team Analytics** dashboard
+- **Per-User Metrics**: Response times, request rates, and provider preferences
+- 📊 See [User Tracking Documentation](docs/USER_TRACKING.md) for details
+
 ### Tracing
 - **Jaeger**: Distributed tracing for all AI requests
 - View traces at http://localhost:16686

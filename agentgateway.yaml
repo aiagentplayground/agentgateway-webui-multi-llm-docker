@@ -36,6 +36,7 @@ config:
 
   # Distributed tracing configuration
   # Sends traces to Jaeger for request monitoring and debugging
+  # Traces include user information from request headers
   tracing:
     otlpEndpoint: http://jaeger:4317    # Jaeger OTLP endpoint
     randomSampling: true                # Enable sampling for all requests
