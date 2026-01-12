@@ -216,79 +216,187 @@ class OpenWebUIInitializer:
         return False
 
     def configure_models(self) -> bool:
-        """Configure AI models in Open WebUI"""
+        """Configure AI models in Open WebUI by directly updating the database"""
         print("\n" + "="*70)
         print("Configuring AI Model Connections")
         print("="*70)
 
-        if not self.admin_token:
-            print("✗ No admin token available, cannot configure connections")
+        try:
+            import subprocess
+
+            # Python script to update database directly
+            db_script = """
+import sqlite3
+import json
+import time
+
+conn = sqlite3.connect('/app/backend/data/webui.db')
+cursor = conn.cursor()
+
+# Get or create config
+cursor.execute('SELECT id, data FROM config')
+result = cursor.fetchone()
+
+if result:
+    config_id, config_data = result
+    data = json.loads(config_data)
+else:
+    config_id = 1
+    data = {}
+
+# Update config with connection settings
+data['ENABLE_OPENAI_API'] = True
+data['OPENAI_API_BASE_URLS'] = [
+    "http://agentgateway:3000/anthropic/v1",
+    "http://agentgateway:3000/openai/v1",
+    "http://agentgateway:3000/xai/v1",
+    "http://agentgateway:3000/gemini/v1"
+]
+data['OPENAI_API_KEYS'] = [
+    "sk-anthropic",
+    "sk-openai",
+    "sk-xai",
+    "sk-gemini"
+]
+
+# Configure openai section
+if 'openai' not in data:
+    data['openai'] = {}
+
+data['openai']['enable'] = True
+data['openai']['api_base_urls'] = data['OPENAI_API_BASE_URLS']
+data['openai']['api_keys'] = data['OPENAI_API_KEYS']
+
+# CRITICAL: Configure api_configs with model_ids
+data['openai']['api_configs'] = {
+    '0': {
+        'enable': True,
+        'tags': [],
+        'prefix_id': '',
+        'model_ids': ['claude-haiku-4-5-20251001'],
+        'connection_type': 'external',
+        'auth_type': 'bearer'
+    },
+    '1': {
+        'enable': True,
+        'tags': [],
+        'prefix_id': '',
+        'model_ids': ['gpt-5.2-2025-12-11'],
+        'connection_type': 'external',
+        'auth_type': 'bearer'
+    },
+    '2': {
+        'enable': True,
+        'tags': [],
+        'prefix_id': '',
+        'model_ids': ['grok-4-latest'],
+        'connection_type': 'external',
+        'auth_type': 'bearer'
+    },
+    '3': {
+        'enable': True,
+        'tags': [],
+        'prefix_id': '',
+        'model_ids': ['gemini-3-pro-preview'],
+        'connection_type': 'external',
+        'auth_type': 'bearer'
+    }
+}
+
+# Disable automatic model fetching
+data['ENABLE_MODEL_FILTER'] = False
+
+# Add models to model table
+models = [
+    {
+        'id': 'claude-haiku-4-5-20251001',
+        'name': 'Anthropic (Claude) - claude-haiku-4-5-20251001',
+        'base_url': 'http://agentgateway:3000/anthropic/v1',
+        'api_key': 'sk-anthropic'
+    },
+    {
+        'id': 'gpt-5.2-2025-12-11',
+        'name': 'OpenAI (GPT) - gpt-5.2-2025-12-11',
+        'base_url': 'http://agentgateway:3000/openai/v1',
+        'api_key': 'sk-openai'
+    },
+    {
+        'id': 'grok-4-latest',
+        'name': 'xAI (Grok) - grok-4-latest',
+        'base_url': 'http://agentgateway:3000/xai/v1',
+        'api_key': 'sk-xai'
+    },
+    {
+        'id': 'gemini-3-pro-preview',
+        'name': 'Gemini - gemini-3-pro-preview',
+        'base_url': 'http://agentgateway:3000/gemini/v1',
+        'api_key': 'sk-gemini'
+    }
+]
+
+timestamp = int(time.time())
+models_added = 0
+
+for model_data in models:
+    # Check if model already exists
+    cursor.execute('SELECT id FROM model WHERE id = ?', (model_data['id'],))
+    if cursor.fetchone():
+        continue
+
+    # Create model entry
+    meta = json.dumps({
+        'profile_image_url': '/static/favicon.png',
+        'description': f"{model_data['name']} via AgentGateway",
+        'capabilities': {},
+        'position': models_added
+    })
+
+    params = json.dumps({
+        'api_base_url': model_data['base_url'],
+        'api_key': model_data['api_key'],
+        'stream': True
+    })
+
+    cursor.execute(
+        'INSERT INTO model (id, user_id, base_model_id, name, meta, params, created_at, updated_at, is_active, access_control) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        (model_data['id'], '', model_data['id'], model_data['name'], meta, params, timestamp, timestamp, 1, json.dumps({'read': {'group_ids': [], 'user_ids': []}, 'write': {'group_ids': [], 'user_ids': []}}))
+    )
+    models_added += 1
+
+# Save config
+if result:
+    cursor.execute('UPDATE config SET data = ?, updated_at = datetime("now") WHERE id = ?',
+                   (json.dumps(data), config_id))
+else:
+    cursor.execute('INSERT INTO config (id, data, version, created_at, updated_at) VALUES (?, ?, 0, datetime("now"), datetime("now"))',
+                   (config_id, json.dumps(data)))
+
+conn.commit()
+conn.close()
+
+print(f"✓ Configured 4 API endpoints")
+print(f"✓ Added {models_added} new models")
+"""
+
+            # Execute the script in the Open WebUI container
+            result = subprocess.run(
+                ["docker", "exec", "open-webui", "python3", "-c", db_script],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+
+            if result.returncode == 0:
+                print("✓ Models configured successfully via database")
+                print(result.stdout)
+                return True
+            else:
+                print(f"✗ Failed to configure models: {result.stderr}")
+                return False
+
+        except Exception as e:
+            print(f"✗ Error configuring models: {e}")
             return False
-
-        # Configure connections for each provider
-        connections = [
-            {
-                "name": "Anthropic (Claude)",
-                "url": "http://agentgateway:3000/anthropic/v1",
-                "api_key": "sk-anthropic",
-                "models": ["claude-haiku-4-5-20251001"]
-            },
-            {
-                "name": "OpenAI (GPT)",
-                "url": "http://agentgateway:3000/openai/v1",
-                "api_key": "sk-openai",
-                "models": ["gpt-5.2-2025-12-11"]
-            },
-            {
-                "name": "xAI (Grok)",
-                "url": "http://agentgateway:3000/xai/v1",
-                "api_key": "sk-xai",
-                "models": ["grok-4-latest"]
-            },
-            {
-                "name": "Gemini",
-                "url": "http://agentgateway:3000/gemini/v1",
-                "api_key": "sk-gemini",
-                "models": ["gemini-3-pro-preview"]
-            }
-        ]
-
-        success_count = 0
-        for conn in connections:
-            print(f"\nConfiguring: {conn['name']}")
-            print(f"  URL: {conn['url']}")
-            print(f"  Models: {', '.join(conn['models'])}")
-
-            try:
-                # Create connection via API
-                payload = {
-                    "url": conn['url'],
-                    "key": conn['api_key'],
-                    "models": conn['models']
-                }
-
-                response = self.session.post(
-                    f"{self.base_url}/api/v1/configs/connections",
-                    json=payload,
-                    timeout=10
-                )
-
-                if response.status_code in [200, 201]:
-                    print(f"  ✓ Connection configured successfully")
-                    success_count += 1
-                elif response.status_code == 409 or "exists" in response.text.lower():
-                    print(f"  ℹ Connection already exists")
-                    success_count += 1
-                else:
-                    print(f"  ⚠ API returned {response.status_code}: {response.text[:100]}")
-
-            except Exception as e:
-                print(f"  ✗ Error: {e}")
-
-            time.sleep(1)
-
-        print(f"\n✓ Configured {success_count}/{len(connections)} connections")
-        return success_count > 0
 
     def print_summary(self, user_results: List[Dict]):
         """Print initialization summary"""

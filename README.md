@@ -2,6 +2,31 @@
 
 A complete multi-provider AI platform with unified gateway, SSO authentication, and comprehensive monitoring.
 
+## TL;DR - Quick Deploy
+
+```bash
+# 1. Set up environment
+cp .env.example .env
+nano .env  # Add your API keys
+
+# 2. Start everything
+docker-compose up -d
+
+# 3. Configure models (REQUIRED!)
+python3 scripts/configure-models-db.py
+docker-compose restart open-webui
+
+# 4. Access Open WebUI
+# http://localhost:8888
+# Login: admin@example.com / Admin123!
+```
+
+**That's it!** All 4 models should now work.
+
+📋 **[Deployment Checklist](DEPLOYMENT_CHECKLIST.md)** - Print this and check off items as you deploy.
+
+See [full deployment guide](#deployment-guide---from-scratch) below for detailed steps.
+
 ## Overview
 
 This platform provides:
@@ -12,6 +37,31 @@ This platform provides:
 - **Agent System**: MCP and A2A agent integration
 
 📊 **[View Platform Presentation](presentation.md)** - Interactive slides covering architecture, setup, and manual model configuration. Run with: `presenterm presentation.md`
+
+## Quick Reference
+
+**Essential Commands:**
+```bash
+# Start everything
+docker-compose up -d
+
+# Configure models (REQUIRED after first start)
+python3 scripts/configure-models-db.py && docker-compose restart open-webui
+
+# Check status
+docker-compose ps
+
+# View logs
+docker-compose logs -f <service-name>
+
+# Complete reset
+docker-compose down -v && docker-compose up -d
+```
+
+**Default Access:**
+- Open WebUI: http://localhost:8888 (admin@example.com / Admin123!)
+- Keycloak: http://localhost:8090 (admin / admin)
+- Grafana: http://localhost:3100 (admin / admin)
 
 
 ## Architecture
@@ -72,40 +122,230 @@ Anthropic  OpenAI    xAI    Gemini
 └── .env                        # Environment variables (API keys)
 ```
 
-## Quick Start
+## Deployment Guide - From Scratch
+
+Follow these steps to deploy the complete platform from scratch.
 
 ### Prerequisites
 
-- Docker & Docker Compose
-- API keys for AI providers (set in `.env`)
+Before starting, ensure you have:
 
-### 1. Set Up Environment
+1. **Docker Engine** (20.10+) and **Docker Compose** (2.0+)
+   ```bash
+   docker --version
+   docker-compose --version
+   ```
+
+2. **Python 3** (for configuration scripts)
+   ```bash
+   python3 --version
+   ```
+
+3. **API Keys** for at least one AI provider:
+   - Anthropic Claude: https://console.anthropic.com/
+   - OpenAI: https://platform.openai.com/api-keys
+   - xAI (Grok): https://x.ai/
+   - Google Gemini: https://makersuite.google.com/app/apikey
+
+4. **System Resources**:
+   - Minimum: 4GB RAM, 10GB disk space
+   - Recommended: 8GB RAM, 20GB disk space
+
+### Step 1: Clone and Configure Environment
 
 ```bash
+# Clone the repository (or navigate to your project directory)
+cd agentgateway-webui-multi-llm-docker
+
+# Create .env file from example
 cp .env.example .env
-# Edit .env and add your API keys:
-# ANTHROPIC_API_KEY=your-key
-# OPENAI_API_KEY=your-key
-# XAI_API_KEY=your-key
-# GEMINI_API_KEY=your-key
+
+# Edit .env and add your API keys
+nano .env  # or use your preferred editor
 ```
 
-### 2. Start Services
+**Required .env configuration:**
+```bash
+# AI Provider API Keys (add at least one)
+ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxxxxxxx
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxx
+XAI_API_KEY=xai-xxxxxxxxxxxxxxxxxxxxx
+GEMINI_API_KEY=xxxxxxxxxxxxxxxxxxxxx
+
+# Database passwords (change in production)
+KEYCLOAK_DB_PASSWORD=keycloak_secure_password
+POSTGRES_PASSWORD=postgres_secure_password
+```
+
+### Step 2: Start All Services
 
 ```bash
+# Start the entire platform
 docker-compose up -d
+
+# This will start:
+# - AgentGateway (main API gateway)
+# - Open WebUI (chat interface)
+# - Keycloak (SSO authentication)
+# - PostgreSQL (Keycloak database)
+# - Prometheus, Grafana, Jaeger (monitoring)
+# - Hello Agent & Calculator Agent (A2A examples)
+# - Init containers (auto-configuration)
 ```
 
-This will start all services and run initialization scripts automatically.
+**Wait for services to be ready** (~60-90 seconds):
+```bash
+# Check service status
+docker-compose ps
 
-### 3. Access Services
+# All services should show "Up" or "healthy"
+# The openwebui-init container will exit after completing setup
+```
+
+### Step 3: Configure Models (CRITICAL)
+
+The init container attempts to configure models automatically, but **you must verify and complete the configuration**:
+
+```bash
+# Run the model configuration script
+python3 scripts/configure-models-db.py
+
+# Restart Open WebUI to apply changes
+docker-compose restart open-webui
+
+# Wait 10 seconds for Open WebUI to start
+sleep 10
+```
+
+**Why this step is critical:** Open WebUI requires specific database configuration that includes:
+- API endpoint URLs
+- API keys
+- Model IDs mapped to each endpoint
+- Connection settings
+
+See [MODEL_CONFIGURATION_FIX.md](MODEL_CONFIGURATION_FIX.md) for technical details.
+
+### Step 4: Verify Deployment
+
+#### 4.1 Check Service Health
+
+```bash
+# Check all containers are running
+docker-compose ps
+
+# Expected output:
+# - agentgateway: Up (healthy)
+# - open-webui: Up (healthy)
+# - keycloak: Up (healthy)
+# - postgres-keycloak: Up (healthy)
+# - jaeger: Up
+# - prometheus: Up
+# - grafana: Up
+# - hello-agent: Up
+# - calculator-agent: Up
+# - openwebui-init: Exited (0)  ← This is normal
+```
+
+#### 4.2 Access Web Interfaces
+
+Open your browser and verify access to:
+
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| **Open WebUI** | http://localhost:8888 | admin@example.com / Admin123! |
+| **Keycloak Admin** | http://localhost:8090 | admin / admin |
+| **AgentGateway Admin** | http://localhost:15000/ui | No auth required |
+| **Grafana** | http://localhost:3100 | admin / admin |
+| **Prometheus** | http://localhost:9090 | No auth required |
+| **Jaeger Tracing** | http://localhost:16686 | No auth required |
+
+#### 4.3 Verify Models in Open WebUI
+
+1. Go to http://localhost:8888
+2. Log in with: **admin@example.com** / **Admin123!**
+3. Look at the **model selector dropdown** at the top of the chat interface
+4. You should see **4 models**:
+   - claude-haiku-4-5-20251001
+   - gpt-5.2-2025-12-11
+   - grok-4-latest
+   - gemini-3-pro-preview
+
+**If models are NOT visible**, see [Troubleshooting: Models Not Appearing](#models-not-appearing)
+
+#### 4.4 Test a Model
+
+1. In Open WebUI, select any model from the dropdown
+2. Type a test message: "Hello! Can you introduce yourself?"
+3. Verify you get a response from the AI model
+
+**Common first-message delays:**
+- First request may take 10-30 seconds (cold start)
+- Subsequent requests should be faster (2-5 seconds)
+
+#### 4.5 Verify Monitoring
+
+```bash
+# Check AgentGateway is exposing metrics
+curl -s http://localhost:15020/metrics | head -20
+
+# Check Prometheus is scraping
+# Visit: http://localhost:9090/targets
+# All targets should be "UP"
+
+# Check Jaeger is receiving traces
+# Visit: http://localhost:16686
+# Select "agentgateway" service and click "Find Traces"
+```
+
+### Step 5: Access Services
+
+All services are now ready:
 
 - **Open WebUI**: http://localhost:8888
-- **Keycloak Admin**: http://localhost:8090 (admin/admin)
+  - Primary chat interface for users
+  - Login with admin@example.com / Admin123!
+
+- **Keycloak Admin**: http://localhost:8090
+  - Manage users, teams, and SSO settings
+  - Login with admin / admin
+
 - **AgentGateway Admin**: http://localhost:15000/ui
-- **Grafana**: http://localhost:3100 (admin/admin)
+  - View gateway configuration and routes
+  - Monitor real-time traffic
+
+- **Grafana**: http://localhost:3100
+  - View metrics dashboards
+  - Track usage by user/team
+  - Login with admin / admin
+
 - **Prometheus**: http://localhost:9090
+  - Query raw metrics
+  - View targets and alerts
+
 - **Jaeger**: http://localhost:16686
+  - Distributed tracing
+  - Debug request flows
+
+### Step 6: Create Additional Users (Optional)
+
+#### Via Keycloak Admin Console:
+
+1. Go to http://localhost:8090
+2. Login as admin / admin
+3. Select **agentgateway** realm (dropdown at top-left)
+4. Navigate to **Users** → **Add User**
+5. Fill in user details and assign to groups:
+   - **marketing** - Marketing team members
+   - **platform** - Platform/engineering team
+   - **security** - Security team
+
+#### Via Open WebUI (if signup enabled):
+
+1. Go to http://localhost:8888
+2. Click "Sign up"
+3. Complete registration form
+
+**Note:** By default, signup is disabled. Admin must create users.
 
 ## Default Users
 
@@ -145,14 +385,37 @@ The platform provides access to 4 AI models through AgentGateway:
 
 ## Configuration
 
-### Adding Models
+### Configuring Models
 
-Models are automatically configured during initialization. To reconfigure:
+Models need to be configured after first deployment. Use the configuration script:
 
 ```bash
+# Recommended script (configures everything correctly)
+python3 scripts/configure-models-db.py
+docker-compose restart open-webui
+
+# Alternative script (does the same thing)
 python3 scripts/configure-openwebui-connections.py
 docker-compose restart open-webui
 ```
+
+**What these scripts do:**
+1. Configure API base URLs and keys
+2. Set up model IDs for each endpoint (critical!)
+3. Add models to the database
+4. Disable automatic model fetching (prevents errors)
+
+**Verify models are working:**
+1. Go to http://localhost:8888
+2. Log in as admin@example.com / Admin123!
+3. Check the model selector dropdown
+4. All 4 models should be visible:
+   - claude-haiku-4-5-20251001
+   - gpt-5.2-2025-12-11
+   - grok-4-latest
+   - gemini-3-pro-preview
+
+See [MODEL_CONFIGURATION_FIX.md](MODEL_CONFIGURATION_FIX.md) for technical details about why this step is necessary.
 
 ### Modifying Gateway Routes
 
@@ -193,17 +456,35 @@ Users are managed through Keycloak:
 
 ## Utility Scripts
 
-### Configure Open WebUI Connections
-```bash
-python3 scripts/configure-openwebui-connections.py
-```
-Automatically configures all AI provider connections in Open WebUI.
-
-### Configure Models Database
+### Configure Models Database (RECOMMENDED)
 ```bash
 python3 scripts/configure-models-db.py
 ```
-Adds model configurations to the Open WebUI database.
+**Use this script** to configure all AI models in Open WebUI. It:
+- Sets up API base URLs and keys
+- Configures model IDs for each endpoint
+- Adds models to the database
+- Disables automatic model fetching
+
+**When to use:** After first deployment, or anytime models aren't appearing.
+
+### Configure Open WebUI Connections (ALTERNATIVE)
+```bash
+python3 scripts/configure-openwebui-connections.py
+```
+Alternative script that does the same thing as `configure-models-db.py`. Use whichever you prefer.
+
+### Track User Activity
+```bash
+python3 scripts/track-users-openwebui.py
+```
+Monitor which users are making requests to which AI providers.
+
+### Analyze User Activity
+```bash
+python3 scripts/analyze-user-activity.py
+```
+Generate reports on user activity, token usage, and cost attribution.
 
 ## Development
 
@@ -243,41 +524,316 @@ docker-compose up -d
 
 ### Models Not Appearing
 
-1. Check connections are configured:
+**Symptom:** Model dropdown in Open WebUI is empty or only shows some models.
+
+**Root Cause:** Open WebUI requires models to be configured in THREE places:
+1. API base URLs and keys (connection settings)
+2. `openai.api_configs` with `model_ids` (CRITICAL - this was often missing!)
+3. Entries in the `model` table
+
+**Solution:**
+
+```bash
+# Step 1: Run the configuration script
+python3 scripts/configure-models-db.py
+
+# Step 2: Restart Open WebUI
+docker-compose restart open-webui
+
+# Step 3: Wait for startup
+sleep 10
+
+# Step 4: Clear browser cache and refresh
+# In your browser: Ctrl+Shift+R (Windows/Linux) or Cmd+Shift+R (Mac)
+```
+
+**Verify the fix:**
+```bash
+# Check database configuration
+docker exec open-webui python3 -c "
+import sqlite3, json
+conn = sqlite3.connect('/app/backend/data/webui.db')
+cursor = conn.cursor()
+cursor.execute('SELECT data FROM config')
+data = json.loads(cursor.fetchone()[0])
+print('Models configured:', data.get('openai', {}).get('api_configs', {}).keys())
+conn.close()
+"
+```
+
+**Alternative script:**
+```bash
+# Use the connections script instead
+python3 scripts/configure-openwebui-connections.py
+docker-compose restart open-webui
+```
+
+**Manual configuration via UI:**
+1. Log in to Open WebUI as admin
+2. Go to: **Admin Panel** → **Settings** → **Connections**
+3. For each API endpoint, click **Edit**
+4. Under **Model IDs**, manually add the model ID
+5. Click **Save**
+
+**See also:** [MODEL_CONFIGURATION_FIX.md](MODEL_CONFIGURATION_FIX.md) for technical details.
+
+### Models Show Error When Used
+
+**Symptom:** Models appear in dropdown but give errors when you try to chat.
+
+**Possible causes:**
+
+1. **Invalid API Key**
    ```bash
-   python3 scripts/configure-openwebui-connections.py
-   docker-compose restart open-webui
+   # Check your .env file has correct keys
+   cat .env | grep -E "ANTHROPIC|OPENAI|XAI|GEMINI"
+
+   # Restart AgentGateway to pick up changes
+   docker-compose restart agentgateway
    ```
 
-2. Log in as admin and verify in: Admin Panel → Settings → Connections
+2. **AgentGateway not routing correctly**
+   ```bash
+   # Check AgentGateway logs
+   docker-compose logs agentgateway --tail 50
+
+   # Look for errors related to API calls
+   docker-compose logs agentgateway | grep -i error
+   ```
+
+3. **Rate limiting**
+   ```bash
+   # Check if you're hitting rate limits
+   docker-compose logs agentgateway | grep -i "rate limit"
+   ```
+
+4. **Network connectivity**
+   ```bash
+   # Test connectivity from Open WebUI to AgentGateway
+   docker exec open-webui curl -s http://agentgateway:3000/health
+
+   # Should return: {"status":"ok"} or similar
+   ```
 
 ### SSO Login Issues
 
-1. Verify Keycloak is healthy:
+**Symptom:** Can't log in with Keycloak SSO, or OAuth errors.
+
+**Solutions:**
+
+1. **Verify Keycloak is healthy:**
    ```bash
    docker-compose ps keycloak
+   # Should show "Up (healthy)"
+
+   docker-compose logs keycloak --tail 50
    ```
 
-2. Check Open WebUI OIDC configuration in docker-compose.yml
+2. **Check Keycloak realm configuration:**
+   - Access: http://localhost:8090
+   - Login: admin / admin
+   - Verify **agentgateway** realm exists
+   - Check **open-webui** client is configured
 
-3. Restart services:
+3. **Verify Open WebUI OIDC configuration:**
    ```bash
+   # Check environment variables
+   docker exec open-webui env | grep OAUTH
+   ```
+
+4. **Common fixes:**
+   ```bash
+   # Restart both services
    docker-compose restart keycloak open-webui
+
+   # If still not working, check logs
+   docker-compose logs open-webui | grep -i oauth
+   docker-compose logs keycloak | grep -i error
+   ```
+
+5. **Reset Keycloak (last resort):**
+   ```bash
+   docker-compose down
+   docker volume rm agentgateway-webui-multi-llm-docker_keycloak-postgres-data
+   docker-compose up -d
+   # Note: This deletes all Keycloak data!
    ```
 
 ### AgentGateway Errors
 
-1. Check configuration syntax:
+**Symptom:** API requests fail, 500 errors, or gateway not responding.
+
+1. **Check configuration syntax:**
    ```bash
+   # View recent errors
    docker-compose logs agentgateway | grep -i error
+
+   # Check if gateway started correctly
+   docker-compose logs agentgateway | head -50
    ```
 
-2. Verify API keys in `.env` file
-
-3. Check health endpoint:
+2. **Verify API keys in `.env` file:**
    ```bash
-   curl http://localhost:3000/health
+   # Check .env file exists and has keys
+   cat .env
+
+   # Restart to pick up changes
+   docker-compose restart agentgateway
    ```
+
+3. **Check YAML configuration:**
+   ```bash
+   # Validate YAML syntax (requires yq or yamllint)
+   yamllint agentgateway.yaml
+
+   # Or just check for obvious errors
+   cat agentgateway.yaml | grep -E "^[^ ]|error"
+   ```
+
+4. **Test health endpoint:**
+   ```bash
+   # From host
+   curl http://localhost:3000/health
+
+   # From inside Open WebUI container
+   docker exec open-webui curl http://agentgateway:3000/health
+   ```
+
+5. **Check resource usage:**
+   ```bash
+   docker stats agentgateway --no-stream
+   # High CPU/memory might indicate issues
+   ```
+
+### Container Won't Start
+
+**Symptom:** Service shows as "Restarting" or "Exited" in `docker-compose ps`.
+
+1. **Check logs for specific error:**
+   ```bash
+   docker-compose logs <service-name>
+   ```
+
+2. **Common issues:**
+
+   **Port conflicts:**
+   ```bash
+   # Check if ports are already in use
+   netstat -tulpn | grep -E "3000|8888|8090"
+
+   # Or on Mac:
+   lsof -i :3000
+   lsof -i :8888
+   ```
+
+   **Volume permissions:**
+   ```bash
+   # Fix volume ownership
+   docker-compose down
+   sudo chown -R $USER:$USER .
+   docker-compose up -d
+   ```
+
+   **Out of memory:**
+   ```bash
+   # Check Docker resources
+   docker system df
+   docker system prune  # Clean up unused resources
+   ```
+
+3. **Reset specific service:**
+   ```bash
+   # Remove and recreate container
+   docker-compose rm -f <service-name>
+   docker-compose up -d <service-name>
+   ```
+
+### Database Issues
+
+**Symptom:** Open WebUI can't save settings, or Keycloak can't authenticate.
+
+1. **Check PostgreSQL (Keycloak database):**
+   ```bash
+   docker-compose logs postgres-keycloak
+
+   # Test connection
+   docker exec postgres-keycloak pg_isready
+   ```
+
+2. **Check Open WebUI database:**
+   ```bash
+   # Verify database file exists
+   docker exec open-webui ls -lh /app/backend/data/webui.db
+
+   # Check database integrity
+   docker exec open-webui sqlite3 /app/backend/data/webui.db "PRAGMA integrity_check;"
+   ```
+
+3. **Reset Open WebUI database (WARNING: Deletes all data!):**
+   ```bash
+   docker-compose down
+   docker volume rm agentgateway-webui-multi-llm-docker_open-webui-data
+   docker-compose up -d
+   ```
+
+### Monitoring Not Working
+
+**Symptom:** Grafana shows no data, Prometheus can't scrape metrics, or Jaeger has no traces.
+
+1. **Check Prometheus targets:**
+   - Visit: http://localhost:9090/targets
+   - All targets should be **UP**
+   - If down, check service connectivity
+
+2. **Verify AgentGateway metrics:**
+   ```bash
+   curl http://localhost:15020/metrics | head -20
+   # Should show Prometheus-formatted metrics
+   ```
+
+3. **Check Grafana data source:**
+   - Visit: http://localhost:3100
+   - Go to: Configuration → Data Sources
+   - Test connection to Prometheus
+
+4. **Verify Jaeger is receiving traces:**
+   ```bash
+   # Make a test request through AgentGateway
+   curl -X POST http://localhost:3000/anthropic/v1/messages \
+     -H "Content-Type: application/json" \
+     -d '{"model": "claude-haiku-4-5-20251001", "messages": [{"role": "user", "content": "test"}], "max_tokens": 10}'
+
+   # Check Jaeger UI for the trace
+   # Visit: http://localhost:16686
+   ```
+
+### Complete Reset
+
+**If all else fails, reset the entire platform:**
+
+```bash
+# Stop all services
+docker-compose down
+
+# Remove all volumes (WARNING: Deletes all data!)
+docker volume rm agentgateway-webui-multi-llm-docker_open-webui-data
+docker volume rm agentgateway-webui-multi-llm-docker_keycloak-postgres-data
+docker volume rm agentgateway-webui-multi-llm-docker_prometheus-data
+docker volume rm agentgateway-webui-multi-llm-docker_grafana-data
+
+# Rebuild images
+docker-compose build --no-cache
+
+# Start fresh
+docker-compose up -d
+
+# Wait for services to start
+sleep 60
+
+# Configure models
+python3 scripts/configure-models-db.py
+docker-compose restart open-webui
+```
 
 ## API Usage Examples
 
